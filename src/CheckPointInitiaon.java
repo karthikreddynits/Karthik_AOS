@@ -82,17 +82,10 @@ public class CheckPointInitiaon implements Runnable {
 
 					}
 
-					// TODO: wait here until I receive ack from all the cohorts
-					// to whom I sent a CP req
-
-					// TODO: wait for the final message; to STORE/DISCARD the
-					// tentative checkpoint
-
-					// TODO: if CP is made permanent, reset the LLR and FLS
-					// vectors
 
 					// increment CP count
-					MainClass.sentCheckPointMessage++;
+					//FIXME: shouldn't his be incremented only if the CP was succesful?
+					//MainClass.sentCheckPointMessage++;
 
 				} catch (ParserConfigurationException e) {
 					e.printStackTrace();

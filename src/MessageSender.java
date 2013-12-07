@@ -37,7 +37,7 @@ public class MessageSender implements Runnable {
 					// increment the messageId. messageId must be monotonically
 					// increasing
 					MainClass.messageId++;
-					Thread.sleep(2000);
+					Thread.sleep(500);
 				}
 
 				// To store the FLS since the last check point
