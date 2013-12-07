@@ -125,7 +125,6 @@ public class MainClass {
 	}
 
 	private static void readTopologyFile() throws IOException {
-		// TODO Auto-generated method stub
 		String fileName = "./topology.txt";
 		String currentLIne = null;
 
@@ -148,8 +147,6 @@ public class MainClass {
 
 	private static void readConfigurationFile() throws NumberFormatException,
 			IOException {
-
-		// TODO Auto-generated method stub
 		String fileName = "./configuration.txt";
 		String currentLIne = null;
 
@@ -277,8 +274,8 @@ public class MainClass {
 
 					}
 					if (MainClass.cpReqCohortCount == 0) {
-						// No req sent from me
-						// SEnd ACK to true
+						// No CP Request forwarded from me
+						// Send ACK true to the parent
 						Message ackMessage = new Message("CheckPointAck",
 								MainClass.nodeId, message.path.get(message.path
 										.size() - 1), 0, null, 0,
@@ -299,11 +296,62 @@ public class MainClass {
 				}
 
 			} else if (cpStatusFlag && InitiatorId == message.initiator) {
-				// already involved in a CP for the same instance of CP request
-				// from
-				// a different process
+				// This is a duplicate request for the CP instance, but coming
+				// from a different sender.
+				// Blindly send an ACK true to this guy
+				// If I fail, I will anyways send false to the original sender
+				// who actually triggered my CP process
+				/*
+				 * node0 -> (node1) ---- node0 will initiate a CP and send REQ
+				 * to node1 
+				 * node1 -> (node0, node2, node3) ---- node1 will
+				 * forward REQ to node2, node3 
+				 * node2 -> (node1, node3) ---- node2 will forward REQ to node3
+				 * node3 -> (node1, node3) ---- node3 will forward to none. node3 first received a REQ from
+				 * node1 and is taking a CP now. But it received a duplicate REQ
+				 * from node2 so node3 will simply send ACK true to node2. If it
+				 * fails in the CP process, it will inform ACK false to node1.
+				 * which inturn sends an ACK false to node0 which will abort the
+				 * CP instance
+				 */
+				// No CP Request forwarded from me
+				// Send ACK true to the parent
+				Message ackMessage = new Message("CheckPointAck",
+						MainClass.nodeId, message.path.get(message.path
+								.size() - 1), 0, null, 0,
+						MainClass.InitiatorId);
+				ackMessage.flag = true;
+				ackMessage.path = message.path;
+				System.out.println("ACK CP MESSAGE FOR DUPLICATE REQ........."
+						+ ackMessage.toString() + "..............\n");
+				try {
+					MainClass.sendMessage(
+							MainClass.connectionChannelMap.get(message.path
+									.get(message.path.size() - 1)),
+							ackMessage);
+				} catch (CharacterCodingException e) {
+					e.printStackTrace();
+				}
+
 			} else {
-				// send back Fail to the sender
+				// I am already in a CP process. I can only process one CP instance at a time
+				// send ACK  false to the message sender
+				Message ackMessage = new Message("CheckPointAck",
+						MainClass.nodeId, message.path.get(message.path
+								.size() - 1), 0, null, 0,
+						MainClass.InitiatorId);
+				ackMessage.flag = false;
+				ackMessage.path = message.path;
+				System.out.println("ACK CP MESSAGE FOR DUPLICATE REQ........."
+						+ ackMessage.toString() + "..............\n");
+				try {
+					MainClass.sendMessage(
+							MainClass.connectionChannelMap.get(message.path
+									.get(message.path.size() - 1)),
+							ackMessage);
+				} catch (CharacterCodingException e) {
+					e.printStackTrace();
+				}
 			}
 
 		}
@@ -382,7 +430,6 @@ public class MainClass {
 								ackMessage);
 					}
 				} catch (CharacterCodingException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 
@@ -461,10 +508,11 @@ public class MainClass {
 		// TODO Auto-generated method stub
 
 		try {
-			String fileName = "./SentMessageTentativeBackup"+nodeId+".txt";
+			String fileName = "./SentMessageTentativeBackup" + nodeId + ".txt";
 			BufferedReader br = new BufferedReader(new FileReader(fileName));
 
-			File file1 = new File("./SentMessagePermanentBackup"+nodeId+".txt");
+			File file1 = new File("./SentMessagePermanentBackup" + nodeId
+					+ ".txt");
 			if (!file1.exists()) {
 				file1.createNewFile();
 			}
@@ -480,10 +528,12 @@ public class MainClass {
 			br.close();
 			bw1.close();
 
-			String fileName1 = "./ReceivedMessageTentativeBackup"+nodeId+".txt";
+			String fileName1 = "./ReceivedMessageTentativeBackup" + nodeId
+					+ ".txt";
 			BufferedReader br1 = new BufferedReader(new FileReader(fileName1));
 
-			File file = new File("./ReceivedMessagePermanentBackup"+nodeId+".txt");
+			File file = new File("./ReceivedMessagePermanentBackup" + nodeId
+					+ ".txt");
 			if (!file.exists()) {
 				file.createNewFile();
 			}
@@ -507,7 +557,6 @@ public class MainClass {
 	}
 
 	private synchronized static void sendPermentCheckPoint() {
-		// TODO Auto-generated method stub
 		// SEND TO ALL THE Coherts which have sent YES TO TENTATIVE
 		try {
 			for (int j : MainClass.connectionChannelMap.keySet()) {
@@ -610,7 +659,7 @@ public class MainClass {
 		 */
 
 		BufferedWriter out = new BufferedWriter(new FileWriter(
-				"./SentMessageTentativeBackup"+nodeId+".txt", false));
+				"./SentMessageTentativeBackup" + nodeId + ".txt", false));
 
 		/*
 		 * File file = new File("./SentMessageTentativeBackup.txt"); if
@@ -627,7 +676,8 @@ public class MainClass {
 
 		out.close();
 
-		File file1 = new File("./ReceivedMessageTentativeBackup"+nodeId+".txt");
+		File file1 = new File("./ReceivedMessageTentativeBackup" + nodeId
+				+ ".txt");
 		if (!file1.exists()) {
 			file1.createNewFile();
 		}
