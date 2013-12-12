@@ -36,7 +36,7 @@ public class CheckPointInitiaon implements Runnable {
 		while ((MainClass.sentCheckPointMessage < MainClass.totalCheckPointMessage)) {
 
 			if (!MainClass.cpStatusFlag
-					&& (MainClass.nodeId == 0 || MainClass.nodeId == 1 || MainClass.nodeId == 2)) {
+					&& (MainClass.nodeId == 0 )) {
 
 				if (((MainClass.getLogicalClock())
 						% (timHashMap.get(MainClass.nodeId)) == 0)) {

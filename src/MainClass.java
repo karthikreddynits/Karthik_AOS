@@ -61,7 +61,7 @@ public class MainClass {
 	static int clockTrigger = 10;
 
 	// CheckPoint Message Variables
-	static int totalCheckPointMessage = 5;
+	static int totalCheckPointMessage = 1;
 	static int sentCheckPointMessage = 0;
 	static volatile boolean cpStatusFlag = false;
 	static int InitiatorId = -1;
@@ -78,8 +78,18 @@ public class MainClass {
 	// CP related
 	static HashMap<Integer, Integer> LLR = new HashMap<Integer, Integer>();
 	static HashMap<Integer, Integer> FLS = new HashMap<Integer, Integer>();
+	static HashMap<Integer, Integer> LLS = new HashMap<Integer, Integer>();
+	static HashMap<Integer, Integer> tempLLS = new HashMap<Integer, Integer>();
 	static boolean FLSflag = true;
-	static boolean StableCPFlag = false;
+	static volatile boolean StableCPFlag = false;
+
+	// ROll back related
+	static volatile boolean rollBackFlag = false;
+	static int totalRollBackMessage = 2;
+	static int sentRollBackMessage = 0;
+	static boolean rollBackDecession = false;
+	static volatile int rollBackAckCount = 0;
+	static volatile int rollBackParent = 0;
 
 	public static void main(String[] args) throws NumberFormatException,
 			IOException, InterruptedException {
@@ -112,6 +122,9 @@ public class MainClass {
 		Thread.sleep(500);
 		CheckPointInitiaon checkPointInitiaon = new CheckPointInitiaon();
 		new Thread(checkPointInitiaon).start();
+
+		RollBackInitiaon rollBackInitiation = new RollBackInitiaon();
+		new Thread(rollBackInitiation).start();
 
 	}
 
@@ -515,7 +528,7 @@ public class MainClass {
 		// if the message is a CP discarrd
 		else if (message.tag.contains("CheckPointDiscard")) {
 
-			StableCPFlag = false;
+			// StableCPFlag = false;
 			// discard the tentative CP. Inform it to coherts
 			removeTentativeCheckPoint();
 			for (int j : MainClass.connectionChannelMap.keySet()) {
@@ -587,7 +600,7 @@ public class MainClass {
 	}
 
 	static void resetVariablesAfterDiscard() {
-		
+
 		MainClass.cpAckCount = 0;
 		MainClass.cpReqCohortCount = 0;
 		MainClass.cpForwardslist.clear();
@@ -599,8 +612,9 @@ public class MainClass {
 		MainClass.applicationMessageMutex = true;
 		MainClass.cpStatusFlag = false;
 		System.out
-				.println("$$$$$$$$$$ end of resrtVariablesAfterDiscard $$$$$$$$"+"--at time stamp :"+getLogicalClock());
-		
+				.println("$$$$$$$$$$ end of resrtVariablesAfterDiscard $$$$$$$$"
+						+ "--at time stamp :" + getLogicalClock());
+
 	}
 
 	static void resetVariablesAfterPermanent() {
@@ -613,7 +627,7 @@ public class MainClass {
 		for (Integer i : FLS.keySet()) {
 			FLS.put(i, 0);
 		}
-
+		StableCPFlag = true;
 		MainClass.cpForwardslist.clear();
 
 		MainClass.FLSflag = true;
@@ -624,12 +638,24 @@ public class MainClass {
 			MainClass.cpACKFlagArray[i] = false;
 		}
 		// start application messages
+
+		// Add temp LLS to LLS
+		for (Integer i : tempLLS.keySet()) {
+			LLS.put(i, tempLLS.get(i));
+		}
+
+		for (Integer i : LLS.keySet()) {
+			System.out.println("...........LLS VALUES.........." + i + "  --->"
+					+ LLS.get(i));
+		}
+		System.out.println("CP FLAG =======>" + StableCPFlag);
 		MainClass.applicationMessageMutex = true;
 		System.out
 				.println("applicationMessageMutex " + applicationMessageMutex);
 		MainClass.cpStatusFlag = false;
 		System.out
-				.println("$$$$$$$$$$ end of resrtVariablesAfterPermanent $$$$$$$$"+"--at time stamp :"+getLogicalClock());
+				.println("$$$$$$$$$$ end of resrtVariablesAfterPermanent $$$$$$$$"
+						+ "--at time stamp :" + getLogicalClock());
 
 	}
 
@@ -807,7 +833,6 @@ public class MainClass {
 		if (!file1.exists()) {
 			file1.createNewFile();
 		}
-
 		FileWriter fw1 = new FileWriter(file1.getAbsoluteFile());
 		BufferedWriter bw1 = new BufferedWriter(fw1);
 
@@ -821,5 +846,208 @@ public class MainClass {
 
 	public synchronized static void removeTentativeCheckPoint() {
 		// DO nothing
+	}
+
+	// ROll back processing block
+	public static synchronized void processRollBackRequest(Message message) {
+
+		if (message.tag.contains("RollBackRequest")) {
+			System.out.println("Processing ROll back REQ message :..."
+					+ "---->" + message.toString() + "\n");
+
+			/*
+			 * If roll Back req is for first time then process and decide yes or
+			 * no if yes set the decession flag to TRUE
+			 * 
+			 * on receiving the req message again if already decession flag is
+			 * true just reply ok the sender.
+			 */
+
+			if (!rollBackDecession) {
+				// Logic to make decession
+				// LLR > LLS (Message)
+
+				try {
+					if (LLR.get(message.senderId) > message.LLS) {
+						rollBackDecession = true;
+
+						// Send the RollBAck request to all my cohorts
+						for (int j : MainClass.connectionChannelMap.keySet()) {
+
+							Message rollBackRequest = new Message(
+									"RollBackRequest", MainClass.nodeId, j, 0,
+									null, 0, message.initiator);
+
+							for (Integer i : message.path) {
+								rollBackRequest.path.add(i);
+							}
+							rollBackRequest.path.add(nodeId);
+							rollBackRequest.LLS = LLS.get(j);
+
+							System.out
+									.println("ForwARDING RollBAck message ******************************************"
+											+ rollBackRequest.toString()
+											+ "\n********************\n");
+							MainClass.sendMessage(
+									MainClass.connectionChannelMap.get(j),
+									rollBackRequest);
+
+						}
+					} else {
+						// Make Flase and send ACK
+						rollBackDecession = false;
+
+						Message rollBackRequest = new Message("RollBackACK",
+								MainClass.nodeId, message.senderId, 0, null, 0,
+								message.initiator);
+						try {
+							MainClass.sendMessage(
+									MainClass.connectionChannelMap
+											.get(message.path.get(message.path
+													.size() - 1)),
+									rollBackRequest);
+						} catch (CharacterCodingException e) {
+							e.printStackTrace();
+						}
+					}
+
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+
+			} else if (rollBackDecession) {
+				// Received Duplicate Request When Flag was already set i have
+				// already told all my Coherts
+
+				System.out
+						.println("Received Duplicate Request When Flag was already set");
+				// send Ok to the sender
+				Message rollBackRequest = new Message("RollBackACK",
+						MainClass.nodeId, message.senderId, 0, null, 0,
+						message.initiator);
+				for (Integer i : message.path) {
+					rollBackRequest.path.add(i);
+				}
+				System.out
+						.println("Sending Back duplicate RollBAck message ******************************************"
+								+ rollBackRequest.toString()
+								+ "\n********************\n");
+				try {
+					MainClass.sendMessage(MainClass.connectionChannelMap
+							.get(message.path.get(message.path.size() - 1)),
+							rollBackRequest);
+				} catch (CharacterCodingException e) {
+					e.printStackTrace();
+				}
+			}
+		} else if (message.tag.contains("RollBackACK")) {
+			// Now wait till u get ACK from all your COherts .... Only then you
+			// can go back to ur parent with an ACK
+
+			rollBackAckCount++;
+
+			// On receiving all ACK's
+			if (rollBackAckCount == cohertList.size()) {
+
+				System.out.println("Entered RollBack ACK Block \n");
+				int index = 0;
+				for (int i = 0; i < message.path.size(); i++) {
+					if (message.path.get(i) == nodeId) {
+						index = i - 1;
+						break;
+					}
+				}
+				if (index == -1) {
+					System.out
+							.println("I am the intiator and Sending Roll BACK finalize to all......................");
+
+					// increment the CP count
+					MainClass.sentRollBackMessage++;
+					sendFinalizeRollBack();
+				} else {
+					// I am not the Initiator ACK to my Parent
+					System.out.println("Index://////////////////////" + index
+							+ "///////////// Index in path "
+							+ message.path.get(index));
+					Message rollBackAckMessage = new Message("RollBackACK",
+							MainClass.nodeId, message.path.get(index), 0, null,
+							0, message.initiator);
+					for (Integer i : message.path) {
+						rollBackAckMessage.path.add(i);
+					}
+					System.out
+							.println("ACK RollBck to my parent MESSAGE........."
+									+ rollBackAckMessage.toString()
+									+ "..............\n");
+					try {
+						MainClass.sendMessage(
+								MainClass.connectionChannelMap.get(index),
+								rollBackAckMessage);
+					} catch (CharacterCodingException e) {
+						e.printStackTrace();
+					}
+				}
+
+			}
+
+		} else if ((message.tag.contains("RollBackFinal"))) {
+			MainClass.rollBackFlag = false;
+			// Receiving Final forward it to all My Coherts .........
+			System.out
+					.println("%%%%%%%%%%%%%%%%%%%%%%%%  ROLIING BACK    %%%%%%%%%%%%%%%%%%%%%%%%%%%%  \n"
+							+ "But my flag is set to -->" + rollBackFlag);
+			for (int j : MainClass.connectionChannelMap.keySet()) {
+				// forward the rollback finalize request to all the cohorts
+				// except the initiator also parent
+				if (j != message.initiator && (!message.path.contains(j))) {
+					Message finalRollBack = new Message("RollBackFinal",
+							MainClass.nodeId, j, 0, null, 0, message.initiator);
+					finalRollBack.path.add(MainClass.nodeId);
+					for (Integer i : message.path) {
+						finalRollBack.path.add(i);
+					}
+					System.out
+							.println("Forwarding final ROll BAck message ******************************************"
+									+ finalRollBack.toString()
+									+ "\n********************\n");
+
+					try {
+						MainClass.sendMessage(
+								MainClass.connectionChannelMap.get(j),
+								finalRollBack);
+					} catch (CharacterCodingException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+
+		}
+
+	}
+
+	private static void sendFinalizeRollBack() {
+		MainClass.rollBackFlag = false;
+		for (int j : MainClass.connectionChannelMap.keySet()) {
+
+			// Send the RollBack request to only those coherts from whom I
+
+			Message finalRollBack = new Message("RollBackFinal",
+					MainClass.nodeId, j, 0, null, 0, nodeId);
+			finalRollBack.path.add(MainClass.nodeId);
+			System.out
+					.println("Sending Final RollBack message ******************************************"
+							+ finalRollBack.toString()
+							+ "\n********************\n");
+
+			try {
+				MainClass.sendMessage(MainClass.connectionChannelMap.get(j),
+						finalRollBack);
+			} catch (CharacterCodingException e) {
+				e.printStackTrace();
+			}
+		}
+
+		// reset the variables after permanent
+
 	}
 }

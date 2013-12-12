@@ -24,18 +24,19 @@ public class MessageSender implements Runnable {
 				// increment the logical clock before sending a message
 				MainClass.incrementLogicalClock();
 				// send the message to all the neighbors
-				for (int j = 0; j < MainClass.connectionChannel.size(); j++) {
+				for (int j : MainClass.connectionChannelMap.keySet()) {
 					String str = "Hey this is test message";
 					Message appMsg = new Message("AppMessage",
-							MainClass.nodeId, MainClass.cohertList.get(j),
-							MainClass.messageId, str,
+							MainClass.nodeId, j, MainClass.messageId, str,
 							MainClass.sentMessageCount, 0);
 					// send the message
 					System.out.println("SENT MESSAGE :" + appMsg.toString()
 							+ "\n");
 					try {
+						MainClass.tempLLS.put(j, MainClass.messageId);
 						MainClass.sendMessage(
-								MainClass.connectionChannel.get(j), appMsg);
+								MainClass.connectionChannelMap.get(j), appMsg);
+
 					} catch (CharacterCodingException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();

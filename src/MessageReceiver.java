@@ -38,24 +38,30 @@ public class MessageReceiver implements Runnable {
 				}
 				if (messageInfo != null) {
 					synchronized (this) {
-						
-						
 
 						// if the message is a CP request
 						if (msg.tag.contains("CheckPoint")) {
-//							System.out.println("Receivd CP .....Message:"+ msg.toString() +"\n");
+							MainClass.applicationMessageMutex = false;
+							// System.out.println("Receivd CP .....Message:"+
+							// msg.toString() +"\n");
 							MainClass.processCheckpointRequest(msg);
 						}
 
 						// if the message is an App message
 						else if (msg.tag.contains("AppMessage")) {
-							System.out.println("Receivd APP Message:"+ msg.toString() +"\n timestamp "+ MainClass.logicalClock);
+							System.out.println("Receivd APP Message:"
+									+ msg.toString() + "\n timestamp "
+									+ MainClass.logicalClock);
 							// increment the logical clock
 							MainClass.incrementLogicalClock();
 							// process the applciation message
 							MainClass.receivedMessageBuffer.add(msg);
 							MainClass.processApplicationMessage(msg);
-							
+
+						} else if (msg.tag.contains("RollBack")) {
+							MainClass.cpStatusFlag = true;
+							MainClass.applicationMessageMutex = false;
+							MainClass.processRollBackRequest(msg);
 						}
 
 					}

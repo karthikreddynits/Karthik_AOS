@@ -13,6 +13,7 @@ public class Message implements Serializable {
 	int initiator;
 	boolean flag;
 	List<Integer> path = new ArrayList<>();
+	int LLS = 0;
 
 	// "[(AppMessage),(SenderID),(ReceiverId),(MonotonicalValue MessID),(Body),(MCount)]"
 
@@ -42,7 +43,5 @@ public class Message implements Serializable {
 				+ messageId + ", Messcount=" + Messcount + ", initiator="
 				+ initiator + ", flag=" + flag + ", path=" + path + "]";
 	}
-
-	
 
 }
