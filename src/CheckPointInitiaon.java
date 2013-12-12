@@ -1,13 +1,8 @@
 import java.io.*;
+import java.util.HashMap;
 
 import javax.xml.parsers.*;
 import javax.xml.transform.*;
-import javax.xml.transform.dom.*;
-import javax.xml.transform.stream.*;
-
-import org.w3c.dom.*;
-
-import com.sun.nio.sctp.SctpChannel;
 
 public class CheckPointInitiaon implements Runnable {
 
@@ -28,69 +23,77 @@ public class CheckPointInitiaon implements Runnable {
 	 */
 	@Override
 	public void run() {
+		int timer = 0;
+		if (MainClass.nodeId == 1) {
+			timer = 5;
+		} else
+			timer = 10;
+		HashMap<Integer, Integer> timHashMap = new HashMap<>();
+		timHashMap.put(0, 5);
+		timHashMap.put(1, 8);
+		timHashMap.put(2, 12);
 
-		while (MainClass.sentCheckPointMessage < MainClass.totalCheckPointMessage) {
-			if (((MainClass.getLogicalClock()) % (10) == 0)
-					&& (MainClass.nodeId == 0)) {
-				MainClass.applicationMessageMutex = false;
-				MainClass.incrementLogicalClock();
-				try {
+		while ((MainClass.sentCheckPointMessage < MainClass.totalCheckPointMessage)) {
 
-					// Taking tentative Check point
-					MainClass.tentativeCheckPoint();
+			if (!MainClass.cpStatusFlag
+					&& (MainClass.nodeId == 0 || MainClass.nodeId == 1 || MainClass.nodeId == 2)) {
 
-					// Sending request to all the cohorts
-					MainClass.InitiatorId = MainClass.nodeId;
-					/*
-					 * for (int j = 0; j < MainClass.connectionChannel.size();
-					 * j++) {
-					 * 
-					 * Message cpMessage = new Message("CheckPoint",
-					 * MainClass.nodeId, MainClass.cohertList.get(j), 0, null,
-					 * 0, MainClass.InitiatorId);
-					 * 
-					 * //Send the CP request to only those cohorts from whom I
-					 * received a message since my last CP
-					 * if(MainClass.LLR.get(j) != 0){ MainClass.sendMessage(
-					 * MainClass.connectionChannel.get(j), cpMessage);
-					 * //increment the cohort count who received CP
-					 * MainClass.cpReqCohortCount++; }
-					 * 
-					 * }
-					 */
+				if (((MainClass.getLogicalClock())
+						% (timHashMap.get(MainClass.nodeId)) == 0)) {
+					System.out.println("CheckPointInitiation.java "
+							+ MainClass.sentCheckPointMessage + " --- "
+							+ MainClass.totalCheckPointMessage + " --- "
+							+ MainClass.getLogicalClock() + "-----"
+							+ MainClass.cpStatusFlag);
+					MainClass.applicationMessageMutex = false;
+					MainClass.cpStatusFlag = true;
+					MainClass.incrementLogicalClock();
+					try {
 
-					for (int j : MainClass.connectionChannelMap.keySet()) {
+						// Taking tentative Check point
+						MainClass.tentativeCheckPoint();
 
-						// Send the CP request to only those cohorts from whom I
-						// received a message since my last CP
-						if (MainClass.LLR.get(j) > 0) {
+						// Sending request to all the cohorts
+						MainClass.InitiatorId = MainClass.nodeId;
+						System.out.println("LLR VAlues :");
+						for (int i : MainClass.LLR.keySet()) {
+							System.out.println("\n" + i + "--->"
+									+ MainClass.LLR.get(i) + "\n");
+						}
+						for (int j : MainClass.connectionChannelMap.keySet()) {
 
-							Message cpMessage = new Message(
-									"CheckPointRequest", MainClass.nodeId, j,
-									0, null, 0, MainClass.InitiatorId);
-							cpMessage.path.add(MainClass.nodeId);
-							System.out
-									.println("Sending CP message ******************************************"
-											+ cpMessage.toString()
-											+ "\n********************\n");
-							MainClass.sendMessage(
-									MainClass.connectionChannelMap.get(j),
-									cpMessage);
-							// increment the cohort count who received CP
-							MainClass.cpReqCohortCount++;
+							// Send the CP request to only those cohorts from
+							// whom I
+							// received a message since my last CP
+							if (MainClass.LLR.get(j) > 0) {
+
+								Message cpMessage = new Message(
+										"CheckPointRequest", MainClass.nodeId,
+										j, 0, null, 0, MainClass.InitiatorId);
+								cpMessage.path.add(MainClass.nodeId);
+								System.out
+										.println("Sending CP message ******************************************"
+												+ cpMessage.toString()
+												+ "\n********************\n");
+								MainClass.sendMessage(
+										MainClass.connectionChannelMap.get(j),
+										cpMessage);
+								// increment the cohort count who received CP
+								MainClass.cpReqCohortCount++;
+								MainClass.cpForwardslist.add(j);
+							}
+
+						}
+						if (MainClass.cpReqCohortCount == 0) {
+							MainClass.applicationMessageMutex = true;
+							MainClass.cpStatusFlag = false;
 						}
 
+					} catch (ParserConfigurationException e) {
+						e.printStackTrace();
+					} catch (IOException | TransformerException e) {
+						e.printStackTrace();
 					}
-
-
-					// increment CP count
-					//FIXME: shouldn't his be incremented only if the CP was succesful?
-					//MainClass.sentCheckPointMessage++;
-
-				} catch (ParserConfigurationException e) {
-					e.printStackTrace();
-				} catch (IOException | TransformerException e) {
-					e.printStackTrace();
 				}
 			}
 		}

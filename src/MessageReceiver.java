@@ -39,15 +39,17 @@ public class MessageReceiver implements Runnable {
 				if (messageInfo != null) {
 					synchronized (this) {
 						
-						System.out.println("Receivd Message:"+ msg.toString() +"\n");
+						
 
 						// if the message is a CP request
 						if (msg.tag.contains("CheckPoint")) {
+//							System.out.println("Receivd CP .....Message:"+ msg.toString() +"\n");
 							MainClass.processCheckpointRequest(msg);
 						}
 
 						// if the message is an App message
 						else if (msg.tag.contains("AppMessage")) {
+							System.out.println("Receivd APP Message:"+ msg.toString() +"\n timestamp "+ MainClass.logicalClock);
 							// increment the logical clock
 							MainClass.incrementLogicalClock();
 							// process the applciation message

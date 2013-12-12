@@ -2,7 +2,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -10,23 +9,12 @@ import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-
-import org.w3c.dom.Attr;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
 
 import com.sun.nio.sctp.MessageInfo;
 import com.sun.nio.sctp.SctpChannel;
@@ -45,11 +33,9 @@ public class MainClass {
 
 	static int nodeCount;
 
-	static int cpReqCohortCount = 0;
-	static int cpAckCount = 0;
 	// flag to check if received ack from all the cohorts
-	static boolean receivedAllAcks = false;
-	static boolean[] cpACKFlagArray;
+	// static boolean receivedAllAcks = false;
+	static volatile boolean[] cpACKFlagArray;
 	static ArrayList<String> domainNameList = new ArrayList<String>();
 	static ArrayList<Integer> portNumerList = new ArrayList<Integer>();
 
@@ -63,22 +49,26 @@ public class MainClass {
 	static HashMap<Integer, SctpChannel> connectionChannelMap = new HashMap<Integer, SctpChannel>();
 
 	// Message Count
-	static int totalMessageCount = 20;
+	static int totalMessageCount = 50;
 	static int sentMessageCount = 0;
 	static int messageId = 0;
 
 	// Synchronization Handler Variables SHARED RESOURSES
-	static boolean applicationMessageMutex = true;
+	static volatile boolean applicationMessageMutex = true;
 
 	// Clock Tick
-	static int logicalClock = 0;
+	static volatile int logicalClock = 0;
 	static int clockTrigger = 10;
 
 	// CheckPoint Message Variables
 	static int totalCheckPointMessage = 5;
 	static int sentCheckPointMessage = 0;
-	static boolean cpStatusFlag = false;
+	static volatile boolean cpStatusFlag = false;
 	static int InitiatorId = -1;
+	static int cpReqCohortCount = 0;
+	static volatile int cpAckCount = 0;
+	static ArrayList<Integer> cpForwardslist = new ArrayList<Integer>();
+	// HashMap<String, Integer> cpInstanceMap = new HashMap<String, Integer>();
 
 	// Data Structures to store the messages sent and received before writing it
 	// into the back up file (from last check point to the current point)
@@ -137,6 +127,9 @@ public class MainClass {
 			tokens = currentLIne.split(" ");
 			if (Integer.parseInt(tokens[0]) == nodeId) {
 				cohertList.add(Integer.parseInt(tokens[1]));
+				// initialize LLR and FLS to 0
+				LLR.put(Integer.parseInt(tokens[1]), 0);
+				FLS.put(Integer.parseInt(tokens[1]), 0);
 			}
 		}
 		// initialize the cpAckFlag array
@@ -239,6 +232,11 @@ public class MainClass {
 			// instance
 			// of the CP
 			if (!cpStatusFlag) {
+				System.out.println("received a new CP REQ from "
+						+ message.senderId + " for initiator "
+						+ message.initiator);
+				cpStatusFlag = true;
+				// System.out.println(cpStatusFlag + ",,,,,,,, Flag");
 				// set the CP static initiator variable
 				InitiatorId = message.initiator;
 				// Freeze the applcation messages by setting this flag false
@@ -246,7 +244,8 @@ public class MainClass {
 				// Take a tentative checkpoint.
 				try {
 					tentativeCheckPoint();
-					// Send a req to all my coherts who have not already received a request for this instance
+					// Send a req to all my coherts who have not already
+					// received a request for this instance
 					for (int j : MainClass.connectionChannelMap.keySet()) {
 
 						// Send the CP request to only those cohorts from whom I
@@ -257,10 +256,12 @@ public class MainClass {
 							Message cpMessage = new Message(
 									"CheckPointRequest", MainClass.nodeId, j,
 									0, null, 0, MainClass.InitiatorId);
-							//Copy the elements of the message.path to cpMessage.path
-							System.out.println(cpMessage.path.size() + " <-----> "+message.path.size());
-//							Collections.copy(cpMessage.path, message.path);
-							for(Integer i : message.path){
+							// Copy the elements of the message.path to
+							// cpMessage.path
+							System.out.println(cpMessage.path.size()
+									+ " <-----> " + message.path.size());
+							// Collections.copy(cpMessage.path, message.path);
+							for (Integer i : message.path) {
 								cpMessage.path.add(i);
 							}
 							cpMessage.path.add(MainClass.nodeId);
@@ -273,10 +274,13 @@ public class MainClass {
 									cpMessage);
 							// increment the cohort count who received CP
 							MainClass.cpReqCohortCount++;
+							// add the node to the CP forwards list
+							cpForwardslist.add(j);
 						}
 
 					}
 					if (MainClass.cpReqCohortCount == 0) {
+						System.out.println(cpStatusFlag + ",,,,,,,, Flag");
 						// No CP Request forwarded from me
 						// Send ACK true to the parent
 						Message ackMessage = new Message("CheckPointAck",
@@ -284,8 +288,8 @@ public class MainClass {
 										.size() - 1), 0, null, 0,
 								MainClass.InitiatorId);
 						ackMessage.flag = true;
-//						Collections.copy(ackMessage.path, message.path);
-						for(Integer i : message.path){
+						// Collections.copy(ackMessage.path, message.path);
+						for (Integer i : message.path) {
 							ackMessage.path.add(i);
 						}
 						System.out.println("ACK CP MESSAGE........."
@@ -301,7 +305,11 @@ public class MainClass {
 					e.printStackTrace();
 				}
 
-			} else if (cpStatusFlag && InitiatorId == message.initiator) {
+			} else if (cpStatusFlag && (InitiatorId == message.initiator)) {
+				// System.out.println(cpStatusFlag + ",,,,,,,, Flag");
+				System.out.println("Received a DUP CP Req from "
+						+ message.senderId + " for initiator "
+						+ message.initiator);
 				// This is a duplicate request for the CP instance, but coming
 				// from a different sender.
 				// Blindly send an ACK true to this guy
@@ -309,11 +317,10 @@ public class MainClass {
 				// who actually triggered my CP process
 				/*
 				 * node0 -> (node1) ---- node0 will initiate a CP and send REQ
-				 * to node1 
-				 * node1 -> (node0, node2, node3) ---- node1 will
-				 * forward REQ to node2, node3 
-				 * node2 -> (node1, node3) ---- node2 will forward REQ to node3
-				 * node3 -> (node1, node3) ---- node3 will forward to none. node3 first received a REQ from
+				 * to node1 node1 -> (node0, node2, node3) ---- node1 will
+				 * forward REQ to node2, node3 node2 -> (node1, node3) ----
+				 * node2 will forward REQ to node3 node3 -> (node1, node3) ----
+				 * node3 will forward to none. node3 first received a REQ from
 				 * node1 and is taking a CP now. But it received a duplicate REQ
 				 * from node2 so node3 will simply send ACK true to node2. If it
 				 * fails in the CP process, it will inform ACK false to node1.
@@ -323,43 +330,45 @@ public class MainClass {
 				// No CP Request forwarded from me
 				// Send ACK true to the parent
 				Message ackMessage = new Message("CheckPointAck",
-						MainClass.nodeId, message.path.get(message.path
-								.size() - 1), 0, null, 0,
+						MainClass.nodeId,
+						message.path.get(message.path.size() - 1), 0, null, 0,
 						MainClass.InitiatorId);
 				ackMessage.flag = true;
-//				Collections.copy(ackMessage.path, message.path);
-				for(Integer i : message.path){
+				// Collections.copy(ackMessage.path, message.path);
+				for (Integer i : message.path) {
 					ackMessage.path.add(i);
 				}
-				System.out.println("ACK CP MESSAGE FOR DUPLICATE REQ........."
-						+ ackMessage.toString() + "..............\n");
+
+				System.out.println("Sending ACK to :"
+						+ message.path.get(message.path.size() - 1));
 				try {
-					MainClass.sendMessage(
-							MainClass.connectionChannelMap.get(message.path
-									.get(message.path.size() - 1)),
+					MainClass.sendMessage(MainClass.connectionChannelMap
+							.get(message.path.get(message.path.size() - 1)),
 							ackMessage);
 				} catch (CharacterCodingException e) {
 					e.printStackTrace();
 				}
 
 			} else {
-				// I am already in a CP process. I can only process one CP instance at a time
-				// send ACK  false to the message sender
+
+				// I am already in a CP process. I can only process one CP
+				// instance at a time
+				// send ACK false to the message sender
 				Message ackMessage = new Message("CheckPointAck",
-						MainClass.nodeId, message.path.get(message.path
-								.size() - 1), 0, null, 0,
-						MainClass.InitiatorId);
+						MainClass.nodeId,
+						message.path.get(message.path.size() - 1), 0, null, 0,
+						message.initiator);
 				ackMessage.flag = false;
-//				Collections.copy(ackMessage.path, message.path);
-				for(Integer i : message.path){
+				// Collections.copy(ackMessage.path, message.path);
+				for (Integer i : message.path) {
 					ackMessage.path.add(i);
 				}
-				System.out.println("ACK msg for a second CP instance........."
-						+ ackMessage.toString() + "..............\n");
+				System.out
+						.println("Received REQ for a second CP instance........."
+								+ ackMessage.toString() + "..............\n");
 				try {
-					MainClass.sendMessage(
-							MainClass.connectionChannelMap.get(message.path
-									.get(message.path.size() - 1)),
+					MainClass.sendMessage(MainClass.connectionChannelMap
+							.get(message.path.get(message.path.size() - 1)),
 							ackMessage);
 				} catch (CharacterCodingException e) {
 					e.printStackTrace();
@@ -398,6 +407,10 @@ public class MainClass {
 						if (index == -1) {
 							System.out
 									.println("I am the intiator and making it stable......................");
+
+							// increment the CP count
+							MainClass.sentCheckPointMessage++;
+
 							sendPermanentCheckPoint();
 						} else {
 							System.out.println("Index://////////////////////"
@@ -406,8 +419,8 @@ public class MainClass {
 							Message ackMessage = new Message("CheckPointAck",
 									MainClass.nodeId, message.path.get(index),
 									0, null, 0, MainClass.InitiatorId);
-//							Collections.copy(ackMessage.path, message.path);
-							for(Integer i : message.path){
+							// Collections.copy(ackMessage.path, message.path);
+							for (Integer i : message.path) {
 								ackMessage.path.add(i);
 							}
 							ackMessage.flag = true;
@@ -420,7 +433,7 @@ public class MainClass {
 						}
 					} else {
 						// Inform parent NO
-						System.out.println("Entered NON-OK BLock \n");
+
 						int index = 0;
 						for (int i = 0; i < message.path.size(); i++) {
 							if (message.path.get(i) == nodeId) {
@@ -430,20 +443,25 @@ public class MainClass {
 						}
 						if (index == -1) {
 							System.out
+									.println("Received at leat one ACK with 'false' and");
+							System.out
 									.println("I am the intiator and discarding......................");
 							sendDiscardCheckPoint();
 						} else {
+							System.out
+									.println("Received at least one ACK with false from my cohorts");
+							System.out
+									.println("Cannot participate in CP. Send NO to parent");
 							Message ackMessage = new Message("CheckPointAck",
 									MainClass.nodeId, message.path.get(index),
 									0, null, 0, MainClass.InitiatorId);
-//							Collections.copy(ackMessage.path, message.path);
-							for(Integer i : message.path){
+							// Collections.copy(ackMessage.path, message.path);
+							for (Integer i : message.path) {
 								ackMessage.path.add(i);
 							}
 							ackMessage.flag = false;
-							System.out.println("ACK CP MESSAGE........."
-									+ ackMessage.toString()
-									+ "..............\n");
+							System.out.println("message "
+									+ ackMessage.toString());
 							MainClass.sendMessage(
 									MainClass.connectionChannelMap.get(index),
 									ackMessage);
@@ -458,18 +476,19 @@ public class MainClass {
 
 		// if the message is a CP permanent
 		else if (message.tag.contains("CheckPointPermanent")) {
-
+			System.out.println("Received Permanent " + message.toString());
 			StableCPFlag = true;
 			writeIntoStable();
 			// make the tentative CP permanent. Inform it to coherts
 			for (int j : MainClass.connectionChannelMap.keySet()) {
-				if ((MainClass.LLR.get(j) > 0) && (!message.path.contains(j))) {
+				if ((MainClass.LLR.get(j) > 0) && (!message.path.contains(j))
+						&& cpForwardslist.contains(j)) {
 
 					Message permCPMessage = new Message("CheckPointPermanent",
 							MainClass.nodeId, j, 0, null, 0,
 							MainClass.InitiatorId);
-//					Collections.copy(permCPMessage.path, message.path);
-					for(Integer i : message.path){
+					// Collections.copy(permCPMessage.path, message.path);
+					for (Integer i : message.path) {
 						permCPMessage.path.add(i);
 					}
 					permCPMessage.path.add(MainClass.nodeId);
@@ -496,17 +515,18 @@ public class MainClass {
 		// if the message is a CP discarrd
 		else if (message.tag.contains("CheckPointDiscard")) {
 
-			StableCPFlag = false;			
+			StableCPFlag = false;
 			// discard the tentative CP. Inform it to coherts
 			removeTentativeCheckPoint();
 			for (int j : MainClass.connectionChannelMap.keySet()) {
-				if ((MainClass.LLR.get(j) > 0) && (!message.path.contains(j))) {
+				if ((MainClass.LLR.get(j) > 0) && (!message.path.contains(j))
+						&& cpForwardslist.contains(j)) {
 
 					Message discardCPMessage = new Message("CheckPointDiscard",
 							MainClass.nodeId, j, 0, null, 0,
 							MainClass.InitiatorId);
-//					Collections.copy(discardCPMessage.path, message.path);
-					for(Integer i : message.path){
+					// Collections.copy(discardCPMessage.path, message.path);
+					for (Integer i : message.path) {
 						discardCPMessage.path.add(i);
 					}
 					discardCPMessage.path.add(MainClass.nodeId);
@@ -531,8 +551,8 @@ public class MainClass {
 
 	}
 
-	private static void sendDiscardCheckPoint() {
-		//remove the tentative CP
+	static void sendDiscardCheckPoint() {
+		// remove the tentative CP
 		removeTentativeCheckPoint();
 		// SEND TO ALL THE Coherts which have sent YES/NO TO TENTATIVE
 		try {
@@ -540,7 +560,7 @@ public class MainClass {
 
 				// Send the CP request to only those cohorts from whom I
 				// received a message since my last CP
-				if (MainClass.LLR.get(j) > 0) {
+				if (MainClass.LLR.get(j) > 0 && cpForwardslist.contains(j)) {
 
 					Message discardCPMessage = new Message("CheckPointDiscard",
 							MainClass.nodeId, j, 0, null, 0,
@@ -556,7 +576,7 @@ public class MainClass {
 							discardCPMessage);
 				}
 			}
-			
+
 			resetVariablesAfterDiscard();
 
 		} catch (CharacterCodingException e) {
@@ -566,41 +586,54 @@ public class MainClass {
 
 	}
 
-	private static void resetVariablesAfterDiscard() {
-		MainClass.cpStatusFlag = false;
+	static void resetVariablesAfterDiscard() {
+		
 		MainClass.cpAckCount = 0;
 		MainClass.cpReqCohortCount = 0;
+		MainClass.cpForwardslist.clear();
 		MainClass.InitiatorId = -1;
 		for (int i = 0; i < MainClass.cpACKFlagArray.length; i++) {
 			MainClass.cpACKFlagArray[i] = false;
 		}
-		//start application messages
+		// start application messages
 		MainClass.applicationMessageMutex = true;
+		MainClass.cpStatusFlag = false;
+		System.out
+				.println("$$$$$$$$$$ end of resrtVariablesAfterDiscard $$$$$$$$"+"--at time stamp :"+getLogicalClock());
+		
 	}
 
-	private static void resetVariablesAfterPermanent() {
-		MainClass.cpStatusFlag = false;
+	static void resetVariablesAfterPermanent() {
 		MainClass.cpAckCount = 0;
 		MainClass.cpReqCohortCount = 0;
-		MainClass.FLS.clear();
+
+		for (Integer i : LLR.keySet()) {
+			LLR.put(i, 0);
+		}
+		for (Integer i : FLS.keySet()) {
+			FLS.put(i, 0);
+		}
+
+		MainClass.cpForwardslist.clear();
+
 		MainClass.FLSflag = true;
-		MainClass.receivedAllAcks = false;
 		MainClass.sentMessageBuffer.clear();
 		MainClass.receivedMessageBuffer.clear();
 		MainClass.InitiatorId = -1;
 		for (int i = 0; i < MainClass.cpACKFlagArray.length; i++) {
 			MainClass.cpACKFlagArray[i] = false;
 		}
-		//increment the CP count
-		MainClass.sentCheckPointMessage++;
-		//start application messages
+		// start application messages
 		MainClass.applicationMessageMutex = true;
-		
-		System.out.println("$$$$$$$$$$ end of resrtVariablesAfterPermanent $$$$$$$$");
+		System.out
+				.println("applicationMessageMutex " + applicationMessageMutex);
+		MainClass.cpStatusFlag = false;
+		System.out
+				.println("$$$$$$$$$$ end of resrtVariablesAfterPermanent $$$$$$$$"+"--at time stamp :"+getLogicalClock());
 
 	}
 
-	private static void writeIntoStable() {
+	static synchronized void writeIntoStable() {
 
 		try {
 			String fileName = "./SentMessageTentativeBackup" + nodeId + ".txt";
@@ -651,7 +684,7 @@ public class MainClass {
 	}
 
 	private synchronized static void sendPermanentCheckPoint() {
-		//Write to stable CP
+		// Write to stable CP
 		writeIntoStable();
 		// SEND TO ALL THE Coherts which have sent YES TO TENTATIVE
 		try {
@@ -659,7 +692,7 @@ public class MainClass {
 
 				// Send the CP request to only those cohorts from whom I
 				// received a message since my last CP
-				if (MainClass.LLR.get(j) > 0) {
+				if (MainClass.LLR.get(j) > 0 && cpForwardslist.contains(j)) {
 
 					Message permCPMessage = new Message("CheckPointPermanent",
 							MainClass.nodeId, j, 0, null, 0,
@@ -675,7 +708,7 @@ public class MainClass {
 							permCPMessage);
 				}
 			}
-			//reset the variables after permanent
+			// reset the variables after permanent
 			resetVariablesAfterPermanent();
 
 		} catch (CharacterCodingException e) {
