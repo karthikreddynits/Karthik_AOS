@@ -8,27 +8,17 @@ public class RollBackInitiaon implements Runnable {
 
 	@Override
 	public void run() {
-		// TODO Auto-generated method stub
-System.out.println("In rollback thread");
-		HashMap<Integer, Integer> timHashMap = new HashMap<>();
-		timHashMap.put(0, 13);
-		/*
-		 * Initiating ROllback 0 ->1 ,2 2-> 3,4
-		 * 
-		 * 0 sends rollreq to 1 and 2, 1,2 decides on that and sets their local
-		 * flag. 2 sends to 3 , 4 once 3,4 replies it send ok to 0 and even 1
-		 * has already sent ok to 0 now 0 sends rollback confirm to its coherts
-		 */
-
+		System.out.println("In rollback thread");
+//		HashMap<Integer, Integer> timHashMap = new HashMap<>();
+//		timHashMap.put(0, 13);
+		boolean executeOnceFlag = true;
 		while ((MainClass.sentRollBackMessage < MainClass.totalRollBackMessage)) {
-
+			// only node 0 will initiate the roll back request
 			if (!MainClass.rollBackFlag && (MainClass.nodeId == 0)
 					&& (MainClass.StableCPFlag)) {
-				//System.out.println("Inside ROll Back first case");
-				
-				if (((MainClass.getLogicalClock())
-						% 13 == 0)) {
-
+			
+				if (((MainClass.sentMessageCount) % 45 == 0) && executeOnceFlag) {
+					executeOnceFlag = false;
 					MainClass.applicationMessageMutex = false;
 					MainClass.cpStatusFlag = true;
 					MainClass.rollBackFlag = true;
@@ -72,11 +62,6 @@ System.out.println("In rollback thread");
 							MainClass.sendMessage(
 									MainClass.connectionChannelMap.get(j),
 									rollBackMessage);
-
-						}
-						if (MainClass.cpReqCohortCount == 0) {
-							MainClass.applicationMessageMutex = true;
-							MainClass.cpStatusFlag = false;
 						}
 
 					} catch (Exception e) {

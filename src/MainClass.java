@@ -2,6 +2,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -49,9 +50,9 @@ public class MainClass {
 	static HashMap<Integer, SctpChannel> connectionChannelMap = new HashMap<Integer, SctpChannel>();
 
 	// Message Count
-	static int totalMessageCount = 50;
-	static int sentMessageCount = 0;
-	static int messageId = 0;
+	static volatile int totalMessageCount = 100;
+	static volatile int sentMessageCount = 0;
+	static volatile int messageId = 0;
 
 	// Synchronization Handler Variables SHARED RESOURSES
 	static volatile boolean applicationMessageMutex = true;
@@ -61,7 +62,7 @@ public class MainClass {
 	static int clockTrigger = 10;
 
 	// CheckPoint Message Variables
-	static int totalCheckPointMessage = 1;
+	static int totalCheckPointMessage = 10;
 	static int sentCheckPointMessage = 0;
 	static volatile boolean cpStatusFlag = false;
 	static int InitiatorId = -1;
@@ -662,46 +663,71 @@ public class MainClass {
 	static synchronized void writeIntoStable() {
 
 		try {
-			String fileName = "./SentMessageTentativeBackup" + nodeId + ".txt";
+			String fileName = "./" + nodeId + "SentMessageTentativeBackup.txt";
 			BufferedReader br = new BufferedReader(new FileReader(fileName));
 
-			File file1 = new File("./SentMessagePermanentBackup" + nodeId
-					+ ".txt");
+			// This is the actual permanent CP file for sent messages
+			File file1 = new File("./" + nodeId + "SentMessagePermanent.txt");
 			if (!file1.exists()) {
 				file1.createNewFile();
 			}
-
-			FileWriter fw1 = new FileWriter(file1.getAbsoluteFile(), true);
+			FileWriter fw1 = new FileWriter(file1.getAbsoluteFile(), false);
 			BufferedWriter bw1 = new BufferedWriter(fw1);
+
+			// This is the backup CP file for sent messages
+			File file2 = new File("./" + nodeId
+					+ "SentMessagePermanentBackup.txt");
+			if (!file2.exists()) {
+				file2.createNewFile();
+			}
+
+			FileWriter fw2 = new FileWriter(file2.getAbsoluteFile(), true);
+			BufferedWriter bw2 = new BufferedWriter(fw2);
 
 			String curLine = null;
 			while ((curLine = br.readLine()) != null) {
 				bw1.write(curLine + "\n");
+				bw2.write(curLine + "\n");
 			}
-			bw1.write("\n---------------------------------------------------------\n");
+			bw2.write("\n---------------------------------------------------------\n");
 			br.close();
 			bw1.close();
+			bw2.close();
 
-			String fileName1 = "./ReceivedMessageTentativeBackup" + nodeId
-					+ ".txt";
+			String fileName1 = "./" + nodeId
+					+ "ReceivedMessageTentativeBackup.txt";
 			BufferedReader br1 = new BufferedReader(new FileReader(fileName1));
 
-			File file = new File("./ReceivedMessagePermanentBackup" + nodeId
-					+ ".txt");
-			if (!file.exists()) {
-				file.createNewFile();
+			// This is the actual permanent CP file for received messages. We
+			// dont really need one though, we are creating one
+			File file3 = new File("./" + nodeId
+					+ "ReceivedMessagePermanent.txt");
+			if (!file3.exists()) {
+				file3.createNewFile();
 			}
 
-			FileWriter fw = new FileWriter(file.getAbsoluteFile(), true);
-			BufferedWriter bw = new BufferedWriter(fw);
+			FileWriter fw3 = new FileWriter(file3.getAbsoluteFile(), false);
+			BufferedWriter bw3 = new BufferedWriter(fw3);
+
+			// This is the backup CP file for received messages.
+			File file4 = new File("./" + nodeId
+					+ "ReceivedMessagePermanentBackup.txt");
+			if (!file4.exists()) {
+				file4.createNewFile();
+			}
+
+			FileWriter fw4 = new FileWriter(file4.getAbsoluteFile(), true);
+			BufferedWriter bw4 = new BufferedWriter(fw4);
 
 			String curLine1 = null;
 			while ((curLine1 = br1.readLine()) != null) {
-				bw.write(curLine1 + "\n");
+				bw3.write(curLine1 + "\n");
+				bw4.write(curLine1 + "\n");
 			}
-			bw.write("---------------------------------------------------------");
+			bw4.write("---------------------------------------------------------\n");
 			br1.close();
-			bw.close();
+			bw3.close();
+			bw4.close();
 
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -810,8 +836,8 @@ public class MainClass {
 		 * // close the writer bw.close();
 		 */
 
-		BufferedWriter out = new BufferedWriter(new FileWriter(
-				"./SentMessageTentativeBackup" + nodeId + ".txt", false));
+		BufferedWriter out = new BufferedWriter(new FileWriter("./" + nodeId
+				+ "SentMessageTentativeBackup.txt", false));
 
 		/*
 		 * File file = new File("./SentMessageTentativeBackup.txt"); if
@@ -828,8 +854,8 @@ public class MainClass {
 
 		out.close();
 
-		File file1 = new File("./ReceivedMessageTentativeBackup" + nodeId
-				+ ".txt");
+		File file1 = new File("./" + nodeId
+				+ "ReceivedMessageTentativeBackup.txt");
 		if (!file1.exists()) {
 			file1.createNewFile();
 		}
@@ -992,13 +1018,13 @@ public class MainClass {
 
 		} else if ((message.tag.contains("RollBackFinal"))) {
 			MainClass.rollBackFlag = false;
-			// Receiving Final forward it to all My Coherts .........
+			// I am client that received a RollBackFinal message.
 			System.out
 					.println("%%%%%%%%%%%%%%%%%%%%%%%%  ROLIING BACK    %%%%%%%%%%%%%%%%%%%%%%%%%%%%  \n"
 							+ "But my flag is set to -->" + rollBackFlag);
 			for (int j : MainClass.connectionChannelMap.keySet()) {
-				// forward the rollback finalize request to all the cohorts
-				// except the initiator also parent
+				// Forward the RollBackFinal message to the cohorts who has not
+				// already received it
 				if (j != message.initiator && (!message.path.contains(j))) {
 					Message finalRollBack = new Message("RollBackFinal",
 							MainClass.nodeId, j, 0, null, 0, message.initiator);
@@ -1020,16 +1046,45 @@ public class MainClass {
 					}
 				}
 			}
-
+			// reset all my variables
+			writeRollBackTraceFile();
+			resetVariablesAfterRollBackFinish();
 		}
 
 	}
 
+	private static void writeRollBackTraceFile() {
+		try {
+			File file1 = new File("./" + nodeId + "RollBackTracefile.txt");
+			if (!file1.exists()) {
+
+				file1.createNewFile();
+
+			}
+			FileWriter fw1 = new FileWriter(file1.getAbsoluteFile(), true);
+			BufferedWriter bw1 = new BufferedWriter(fw1);
+
+			for (int i = 0; i < MainClass.sentMessageBuffer.size(); i++) {
+				bw1.write(MainClass.sentMessageBuffer.get(i).toString());
+				bw1.write("\n");
+			}
+			bw1.write("---------------------------------------------------\n");
+			for (int i = 0; i < MainClass.receivedMessageBuffer.size(); i++) {
+				bw1.write(MainClass.receivedMessageBuffer.get(i).toString());
+				bw1.write("\n");
+			}
+			bw1.write("===========================================================================\n");
+			bw1.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
 	private static void sendFinalizeRollBack() {
-		MainClass.rollBackFlag = false;
 		for (int j : MainClass.connectionChannelMap.keySet()) {
 
-			// Send the RollBack request to only those coherts from whom I
+			// I was the initiator, forawrd the RollBackFinal message to all my
+			// cohorts
 
 			Message finalRollBack = new Message("RollBackFinal",
 					MainClass.nodeId, j, 0, null, 0, nodeId);
@@ -1046,8 +1101,73 @@ public class MainClass {
 				e.printStackTrace();
 			}
 		}
-
+		// write status to file
+		writeRollBackTraceFile();
 		// reset the variables after permanent
+		resetVariablesAfterRollBackFinish();
 
+	}
+
+	private static void resetVariablesAfterRollBackFinish() {
+
+		// read the sent permanent CP file to find the messageId
+		try {
+			String fileName = "./" + nodeId + "SentMessagePermanent.txt";
+			BufferedReader br = new BufferedReader(new FileReader(fileName));
+			String str = "";
+			// set the messageId to 0 by default. then keep updating it
+			MainClass.messageId = 0;
+			while ((str = br.readLine()) != null) {
+				// split the string based on ','
+				String[] tokens = str.split(",");
+				// tokens are key value pairs. split the tokens based on '='
+				for (String s : tokens) {
+					String[] subTokens = s.split("=");
+					// we only need to get the messageId token
+					if (subTokens[0].trim().equals("messageId")) {
+						MainClass.messageId = Integer.parseInt(subTokens[1]
+								.trim());
+					}
+				}
+			}
+			if (MainClass.messageId != 0) {
+				MainClass.messageId++;
+			}
+
+			// reset all the variables
+			MainClass.sentMessageCount = messageId;
+			MainClass.cpAckCount = 0;
+			MainClass.cpReqCohortCount = 0;
+
+			for (Integer i : LLR.keySet()) {
+				LLR.put(i, 0);
+			}
+			for (Integer i : FLS.keySet()) {
+				FLS.put(i, 0);
+			}
+			StableCPFlag = true;
+			MainClass.cpForwardslist.clear();
+
+			MainClass.FLSflag = true;
+			MainClass.sentMessageBuffer.clear();
+			MainClass.receivedMessageBuffer.clear();
+			MainClass.InitiatorId = -1;
+			for (int i = 0; i < MainClass.cpACKFlagArray.length; i++) {
+				MainClass.cpACKFlagArray[i] = false;
+			}
+			// start application messages
+			// set rollback flag false
+			MainClass.rollBackFlag = false;
+			// set message mutex flag true
+			MainClass.applicationMessageMutex = true;
+			// set cpStatusFlag false
+			MainClass.cpStatusFlag = false;
+			System.out
+					.println("&&&&&&& end of resrtVariablesAfterRollBackFinal &&&&&&&&"
+							+ "--at time stamp :" + getLogicalClock());
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 }

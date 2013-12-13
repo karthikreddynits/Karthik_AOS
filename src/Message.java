@@ -38,10 +38,10 @@ public class Message implements Serializable {
 
 	@Override
 	public String toString() {
-		return "Message [senderId=" + senderId + ", receiverId=" + receiverId
+		return "Message senderId=" + senderId + ", receiverId=" + receiverId
 				+ ", tag=" + tag + ", body=" + body + ", messageId="
 				+ messageId + ", Messcount=" + Messcount + ", initiator="
-				+ initiator + ", flag=" + flag + ", path=" + path + "]";
+				+ initiator + ", flag=" + flag + ", path=" + path+"\n";
 	}
 
 }

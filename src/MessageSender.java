@@ -23,11 +23,13 @@ public class MessageSender implements Runnable {
 						+ MainClass.applicationMessageMutex);
 				// increment the logical clock before sending a message
 				MainClass.incrementLogicalClock();
+				// declare app message
+				Message appMsg = null;
 				// send the message to all the neighbors
 				for (int j : MainClass.connectionChannelMap.keySet()) {
 					String str = "Hey this is test message";
-					Message appMsg = new Message("AppMessage",
-							MainClass.nodeId, j, MainClass.messageId, str,
+					appMsg = new Message("AppMessage", MainClass.nodeId, j,
+							MainClass.messageId, str,
 							MainClass.sentMessageCount, 0);
 					// send the message
 					System.out.println("SENT MESSAGE :" + appMsg.toString()
@@ -38,17 +40,15 @@ public class MessageSender implements Runnable {
 								MainClass.connectionChannelMap.get(j), appMsg);
 
 					} catch (CharacterCodingException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
-					// add the message to the message buffer
-					MainClass.sentMessageBuffer.add(appMsg);
-					// increment the messageId. messageId must be
-					// monotonically
-					// increasing
-					MainClass.messageId++;
-					// Thread.sleep(100);
+
 				}
+				// add the message to the message buffer
+				MainClass.sentMessageBuffer.add(appMsg);
+				// increment the messageId. messageId must be monotonically
+				// increasing
+				MainClass.messageId++;
 
 				// To store the FLS since the last check point
 				// Everytime a new checkpoint is taken, this flag becomes
