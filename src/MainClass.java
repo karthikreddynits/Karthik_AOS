@@ -59,14 +59,14 @@ public class MainClass {
 
 	// Clock Tick
 	static volatile int logicalClock = 0;
-	static int clockTrigger = 10;
+	static volatile int clockTrigger = 10;
 
 	// CheckPoint Message Variables
-	static int totalCheckPointMessage = 10;
-	static int sentCheckPointMessage = 0;
+	static volatile int totalCheckPointMessage = 10;
+	static volatile int sentCheckPointMessage = 0;
 	static volatile boolean cpStatusFlag = false;
-	static int InitiatorId = -1;
-	static int cpReqCohortCount = 0;
+	static volatile int InitiatorId = -1;
+	static volatile int cpReqCohortCount = 0;
 	static volatile int cpAckCount = 0;
 	static ArrayList<Integer> cpForwardslist = new ArrayList<Integer>();
 	// HashMap<String, Integer> cpInstanceMap = new HashMap<String, Integer>();
@@ -81,14 +81,14 @@ public class MainClass {
 	static HashMap<Integer, Integer> FLS = new HashMap<Integer, Integer>();
 	static HashMap<Integer, Integer> LLS = new HashMap<Integer, Integer>();
 	static HashMap<Integer, Integer> tempLLS = new HashMap<Integer, Integer>();
-	static boolean FLSflag = true;
+	static volatile boolean FLSflag = true;
 	static volatile boolean StableCPFlag = false;
 
 	// ROll back related
 	static volatile boolean rollBackFlag = false;
-	static int totalRollBackMessage = 2;
-	static int sentRollBackMessage = 0;
-	static boolean rollBackDecession = false;
+	static volatile int totalRollBackMessage = 2;
+	static volatile int sentRollBackMessage = 0;
+	static volatile boolean rollBackDecession = false;
 	static volatile int rollBackAckCount = 0;
 	static volatile int rollBackParent = 0;
 
@@ -1158,10 +1158,13 @@ public class MainClass {
 			// start application messages
 			// set rollback flag false
 			MainClass.rollBackFlag = false;
+			//set rollback decision flag
+			MainClass.rollBackDecession = false;
 			// set message mutex flag true
 			MainClass.applicationMessageMutex = true;
 			// set cpStatusFlag false
 			MainClass.cpStatusFlag = false;
+			MainClass.rollBackAckCount = 0;
 			System.out
 					.println("&&&&&&& end of resrtVariablesAfterRollBackFinal &&&&&&&&"
 							+ "--at time stamp :" + getLogicalClock());

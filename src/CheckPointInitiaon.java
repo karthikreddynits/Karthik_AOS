@@ -23,18 +23,22 @@ public class CheckPointInitiaon implements Runnable {
 	 */
 	@Override
 	public void run() {
-		
+
 		HashMap<Integer, Integer> timHashMap = new HashMap<>();
 		timHashMap.put(0, 10);
-//		timHashMap.put(1, 8);
-//		timHashMap.put(2, 12);
+		timHashMap.put(1, 30);
+		// timHashMap.put(2, 12);
 
 		while ((MainClass.sentCheckPointMessage < MainClass.totalCheckPointMessage)) {
 			// only node 0 will initiate the CP request
-			if (!MainClass.cpStatusFlag && (MainClass.nodeId == 0)) {
+			if (!MainClass.cpStatusFlag
+					&& (MainClass.nodeId == 0 || MainClass.nodeId == 1)) {
 
 				if (((MainClass.sentMessageCount)
 						% (timHashMap.get(MainClass.nodeId)) == 0)) {
+
+					timHashMap.put(MainClass.nodeId,
+							timHashMap.get(MainClass.nodeId) + 40);
 					System.out.println("CheckPointInitiation.java "
 							+ MainClass.sentCheckPointMessage + " --- "
 							+ MainClass.totalCheckPointMessage + " --- "

@@ -9,16 +9,17 @@ public class RollBackInitiaon implements Runnable {
 	@Override
 	public void run() {
 		System.out.println("In rollback thread");
-//		HashMap<Integer, Integer> timHashMap = new HashMap<>();
-//		timHashMap.put(0, 13);
-		boolean executeOnceFlag = true;
+		HashMap<Integer, Integer> timHashMap = new HashMap<>();
+		timHashMap.put(0, 45);
 		while ((MainClass.sentRollBackMessage < MainClass.totalRollBackMessage)) {
 			// only node 0 will initiate the roll back request
 			if (!MainClass.rollBackFlag && (MainClass.nodeId == 0)
 					&& (MainClass.StableCPFlag)) {
-			
-				if (((MainClass.sentMessageCount) % 45 == 0) && executeOnceFlag) {
-					executeOnceFlag = false;
+
+				if (((MainClass.sentMessageCount)
+						% timHashMap.get(MainClass.nodeId) == 0)) {
+					timHashMap.put(MainClass.nodeId,
+							timHashMap.get(MainClass.nodeId) + 40);
 					MainClass.applicationMessageMutex = false;
 					MainClass.cpStatusFlag = true;
 					MainClass.rollBackFlag = true;
