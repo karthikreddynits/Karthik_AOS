@@ -312,7 +312,7 @@ public class MainClass {
 								MainClass.connectionChannelMap.get(message.path
 										.get(message.path.size() - 1)),
 								ackMessage);
-
+						System.out.println("sENT TO MY PARENT");
 					}
 
 				} catch (Exception e) {
@@ -384,6 +384,7 @@ public class MainClass {
 					MainClass.sendMessage(MainClass.connectionChannelMap
 							.get(message.path.get(message.path.size() - 1)),
 							ackMessage);
+					System.out.println("sent IT ");
 				} catch (CharacterCodingException e) {
 					e.printStackTrace();
 				}
@@ -429,7 +430,12 @@ public class MainClass {
 						} else {
 							System.out.println("Index://////////////////////"
 									+ index + "///////////// Index in path "
-									+ message.path.get(index));
+									+ message.path.get(message.path.get(index)));
+							
+							System.out
+							.println("clIENT sOCKET"
+									+ MainClass.connectionChannelMap
+											.get(message.path.get(index)));
 							Message ackMessage = new Message("CheckPointAck",
 									MainClass.nodeId, message.path.get(index),
 									0, null, 0, MainClass.InitiatorId);
@@ -441,9 +447,11 @@ public class MainClass {
 							System.out.println("ACK CP MESSAGE........."
 									+ ackMessage.toString()
 									+ "..............\n");
+							
 							MainClass.sendMessage(
-									MainClass.connectionChannelMap.get(index),
+									MainClass.connectionChannelMap.get(message.path.get(index)),
 									ackMessage);
+							System.out.println("sent IT TO:" + message.path.get(index));
 						}
 					} else {
 						// Inform parent NO
@@ -477,7 +485,7 @@ public class MainClass {
 							System.out.println("message "
 									+ ackMessage.toString());
 							MainClass.sendMessage(
-									MainClass.connectionChannelMap.get(index),
+									MainClass.connectionChannelMap.get(message.path.get(index)),
 									ackMessage);
 						}
 					}
@@ -1007,7 +1015,7 @@ public class MainClass {
 									+ "..............\n");
 					try {
 						MainClass.sendMessage(
-								MainClass.connectionChannelMap.get(index),
+								MainClass.connectionChannelMap.get(message.path.get(index)),
 								rollBackAckMessage);
 					} catch (CharacterCodingException e) {
 						e.printStackTrace();
@@ -1158,7 +1166,7 @@ public class MainClass {
 			// start application messages
 			// set rollback flag false
 			MainClass.rollBackFlag = false;
-			//set rollback decision flag
+			// set rollback decision flag
 			MainClass.rollBackDecession = false;
 			// set message mutex flag true
 			MainClass.applicationMessageMutex = true;

@@ -1,4 +1,5 @@
-0 net35.utdallas.edu 52349
-1 net36.utdallas.edu 52349
-2 net37.utdallas.edu 52349
+0 net35.utdallas.edu 52346
+1 net36.utdallas.edu 52347
+2 net37.utdallas.edu 52348
 3 net38.utdallas.edu 52349
+4 net39.utdallas.edu 52350
